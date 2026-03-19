@@ -102,61 +102,40 @@ def get_xgb_importance(X, X_train, X_test, y_train, y_test, top_n=10):
 
 
 # ── 5. Compare RF vs XGBoost ──────────────────────────────────────────────────
-def compare_models(rf_df, xgb_df, df, top_n=10):
-    rf_top  = set(rf_df["feature"].tolist())
-    xgb_top = set(xgb_df["feature"].tolist())
-
-    agreed   = rf_top & xgb_top
-    rf_only  = rf_top - xgb_top
-    xgb_only = xgb_top - rf_top
-
-    print("\n[EDA] ── Feature Agreement ──────────────────────────")
-    print(f"  Agreed by both models : {agreed}")
-    print(f"  RF only               : {rf_only}")
-    print(f"  XGBoost only          : {xgb_only}")
-    print(f"  Agreement rate        : {len(agreed)}/10 features")
-    print("─────────────────────────────────────────────────────")
-
-    # Assign ranks (1 = most important)
-    rf_df = rf_df.copy()
+def compare_models(rf_df, xgb_df, top_n=10):
+    rf_df  = rf_df.copy()
     xgb_df = xgb_df.copy()
 
-    rf_df["rank"] = range(1, len(rf_df) + 1)
-    xgb_df["rank"] = range(1, len(xgb_df) + 1)
+    rf_df["rf_rank"]   = range(1, len(rf_df)  + 1)
+    xgb_df["xgb_rank"] = range(1, len(xgb_df) + 1)
 
-    # Merge on feature name
     comparison = pd.merge(
-        rf_df[["feature", "importance", "rank"]].rename(
-            columns={"importance": "rf_importance", "rank": "rf_rank"}
-        ),
-        xgb_df[["feature", "importance", "rank"]].rename(
-            columns={"importance": "xgb_importance", "rank": "xgb_rank"}
-        ),
-        on="feature",
-        how="outer"
+        rf_df[["feature", "importance", "rf_rank"]].rename(
+            columns={"importance": "rf_importance"}),
+        xgb_df[["feature", "importance", "xgb_rank"]].rename(
+            columns={"importance": "xgb_importance"}),
+        on="feature", how="outer"
     )
 
-    # Fill NaN ranks with worst rank (top_n + 1) for features missing from one model
-    comparison["rf_rank"] = comparison["rf_rank"].fillna(top_n + 1)
+    comparison["rf_rank"]  = comparison["rf_rank"].fillna(top_n + 1)
     comparison["xgb_rank"] = comparison["xgb_rank"].fillna(top_n + 1)
-
-    # Average rank — lower is better
     comparison["avg_rank"] = (
-            (comparison["rf_rank"] + comparison["xgb_rank"]) / 2
+        (comparison["rf_rank"] + comparison["xgb_rank"]) / 2
     ).round(1)
-
-    # Consensus flag
-    comparison["in_both"] = (comparison["rf_rank"] <= top_n) & (comparison["xgb_rank"] <= top_n)
-
+    comparison["in_both"] = (
+        (comparison["rf_rank"]  <= top_n) &
+        (comparison["xgb_rank"] <= top_n)
+    )
     comparison = comparison.sort_values("avg_rank")
 
-    print("\n[EDA] ── Rank-Based Feature Comparison ─────────────────")
-    print(comparison.to_string(index=False))
-    print("─────────────────────────────────────────────────────────")
-    print(f"\n  Features agreed by both : {comparison['in_both'].sum()}")
-    print(f"  Top 10 by avg rank       : {comparison['feature'].head(10).tolist()}")
+    # ── Only change: top 10 by avg rank ──
+    top_10_features = comparison["feature"].head(top_n).tolist()
 
-    return agreed, rf_only, xgb_only, comparison
+    print("\n[EDA] ── Rank-Based Top 10 ───────────────────────────────")
+    print(comparison.head(top_n)[["feature", "rf_rank", "xgb_rank", "avg_rank", "in_both"]].to_string(index=False))
+    print("─────────────────────────────────────────────────────────")
+
+    return comparison, top_10_features
 
 
 # ── 6. Plot RF vs XGBoost Side by Side ───────────────────────────────────────
@@ -189,56 +168,152 @@ def plot_importance_comparison(rf_df, xgb_df):
     print("[EDA] Saved → 02_rf_vs_xgb_importance.png")
 
 
-# ── 7. Plot Agreed Features Distribution by Target ───────────────────────────
-def plot_agreed_distributions(df, agreed_features):
-    agreed_features = list(agreed_features)
-    n     = len(agreed_features)
-    ncols = 3
+# ── 7. Box Plots by Target ────────────────────────────────────────────────────
+def plot_boxplots(df, all_top_features):
+    n     = len(all_top_features)
+    ncols = 4
     nrows = (n + ncols - 1) // ncols
 
-    fig, axes = plt.subplots(nrows, ncols, figsize=(16, nrows * 4))
+    fig, axes = plt.subplots(nrows, ncols, figsize=(18, nrows * 4))
     axes = axes.flatten()
 
-    for i, feature in enumerate(agreed_features):
-        for label, color in [(0, "steelblue"), (1, "tomato")]:
-            axes[i].hist(
-                df[df["target"] == label][feature].dropna(),
-                bins=40, alpha=0.6, color=color,
-                label="Non-Defaulter" if label == 0 else "Defaulter",
-                density=True
-            )
+    for i, feature in enumerate(all_top_features):
+        df.boxplot(column=feature, by="target", ax=axes[i])
         axes[i].set_title(feature, fontsize=9)
-        axes[i].set_ylabel("Density")
-        if i == 0:
-            axes[i].legend(fontsize=8)
+        axes[i].set_xlabel("0 = Non-Defaulter   1 = Defaulter")
+        axes[i].set_ylabel("")
 
-    # Hide unused subplots
     for j in range(i + 1, len(axes)):
         axes[j].set_visible(False)
 
-    fig.suptitle("Agreed Features — Distribution by Target", y=1.01)
-    fig.tight_layout()
-    fig.savefig(os.path.join(VISUALS_EDA, "03_agreed_features_distribution.png"), dpi=150)
+    fig.suptitle("Feature Distribution by Target — Box Plots", fontsize=12)
+    plt.tight_layout()
+    fig.savefig(os.path.join(VISUALS_EDA, "03_boxplots_by_target.png"), dpi=150)
     plt.close()
-    print("[EDA] Saved → 03_agreed_features_distribution.png")
+    print("[EDA] Saved → 03_boxplots_by_target.png")
 
+# ── 8. Bad Rate by Decile ─────────────────────────────────────────────────────
+def plot_bad_rate_by_decile(df, all_top_features):
+    n     = len(all_top_features)
+    ncols = 4
+    nrows = (n + ncols - 1) // ncols
 
-# ── 8. Correlation Heatmap on Agreed Features ─────────────────────────────────
-def plot_correlation_heatmap(df, agreed_features):
-    cols = list(agreed_features) + ["target"]
+    fig, axes = plt.subplots(nrows, ncols, figsize=(18, nrows * 4))
+    axes = axes.flatten()
+
+    for i, feature in enumerate(all_top_features):
+        temp = df[[feature, "target"]].copy()
+        temp["decile"] = pd.qcut(temp[feature], q=10, duplicates="drop")
+
+        bad_rate = temp.groupby("decile", observed=True)["target"].mean()
+        count    = temp.groupby("decile", observed=True)["target"].count()
+
+        ax1 = axes[i]
+        ax2 = ax1.twinx()
+
+        ax1.bar(range(len(bad_rate)), bad_rate.values,
+                color="tomato", alpha=0.7)
+        ax2.plot(range(len(count)), count.values,
+                 color="steelblue", marker="o", linewidth=1.5)
+
+        ax1.set_title(feature, fontsize=9)
+        ax1.set_ylabel("Bad rate", color="tomato", fontsize=8)
+        ax2.set_ylabel("Count",    color="steelblue", fontsize=8)
+        ax1.set_xticks(range(len(bad_rate)))
+        ax1.set_xticklabels(
+            [f"D{j+1}" for j in range(len(bad_rate))],
+            fontsize=7
+        )
+
+    for j in range(i + 1, len(axes)):
+        axes[j].set_visible(False)
+
+    fig.suptitle("Bad Rate by Decile — Top Features", fontsize=12)
+    plt.tight_layout()
+    fig.savefig(os.path.join(VISUALS_EDA, "04_bad_rate_by_decile.png"), dpi=150)
+    plt.close()
+    print("[EDA] Saved → 04_bad_rate_by_decile.png")
+
+# ── 9. Mean Feature Value by Target ──────────────────────────────────────────
+def plot_mean_by_target(df, all_top_features):
+    means = df.groupby("target")[all_top_features].mean().T
+    means.columns = ["Non-Defaulter", "Defaulter"]
+
+    # Normalise so features on different scales are comparable
+    means_norm = means.div(means.abs().max(axis=1), axis=0)
+
+    fig, ax = plt.subplots(figsize=(14, 6))
+    x = np.arange(len(all_top_features))
+    w = 0.35
+
+    ax.bar(x - w/2, means_norm["Non-Defaulter"],
+           w, label="Non-Defaulter", color="steelblue", alpha=0.85)
+    ax.bar(x + w/2, means_norm["Defaulter"],
+           w, label="Defaulter",     color="tomato",    alpha=0.85)
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(all_top_features, rotation=30, ha="right", fontsize=9)
+    ax.set_title("Normalised Mean Feature Value — Defaulter vs Non-Defaulter")
+    ax.set_ylabel("Normalised mean (relative scale)")
+    ax.legend()
+    ax.axhline(0, color="black", linewidth=0.5)
+    fig.tight_layout()
+    fig.savefig(os.path.join(VISUALS_EDA, "05_mean_by_target.png"), dpi=150)
+    plt.close()
+    print("[EDA] Saved → 05_mean_by_target.png")
+
+# ── 10. Cumulative Bad Rate Curve ─────────────────────────────────────────────
+def plot_cumulative_bad_rate(df, all_top_features):
+    n     = len(all_top_features)
+    ncols = 4
+    nrows = (n + ncols - 1) // ncols
+
+    fig, axes = plt.subplots(nrows, ncols, figsize=(18, nrows * 4))
+    axes = axes.flatten()
+
+    total_bads = (df["target"] == 1).sum()
+
+    for i, feature in enumerate(all_top_features):
+        sorted_df = df[[feature, "target"]].sort_values(feature)
+        cum_bad  = (sorted_df["target"] == 1).cumsum() / total_bads
+        cum_pop  = np.arange(1, len(sorted_df) + 1) / len(sorted_df)
+
+        axes[i].plot(cum_pop, cum_bad.values, color="tomato",    lw=2, label="Feature")
+        axes[i].plot([0, 1],  [0, 1],         color="steelblue", lw=1,
+                     linestyle="--", label="Random")
+        axes[i].fill_between(cum_pop, cum_bad.values, cum_pop,
+                             alpha=0.1, color="tomato")
+        axes[i].set_title(feature, fontsize=9)
+        axes[i].set_xlabel("% Population", fontsize=8)
+        axes[i].set_ylabel("% Defaults Captured", fontsize=8)
+        if i == 0:
+            axes[i].legend(fontsize=8)
+
+    for j in range(i + 1, len(axes)):
+        axes[j].set_visible(False)
+
+    fig.suptitle("Cumulative Default Capture — Top Features", fontsize=12)
+    plt.tight_layout()
+    fig.savefig(os.path.join(VISUALS_EDA, "06_cumulative_bad_rate.png"), dpi=150)
+    plt.close()
+    print("[EDA] Saved → 06_cumulative_bad_rate.png")
+
+# ── 11. Correlation Heatmap ─────────────────────────────────
+def plot_correlation_heatmap(df, all_top_features):
+    cols = all_top_features + ["target"]
     corr = df[cols].corr()
 
-    fig, ax = plt.subplots(figsize=(10, 8))
+    fig, ax = plt.subplots(figsize=(12, 10))
     sns.heatmap(
         corr, annot=True, fmt=".2f",
         cmap="coolwarm", center=0,
         linewidths=0.3, ax=ax
     )
-    ax.set_title("Correlation Heatmap — Agreed Features + Target")
+    ax.set_title("Correlation Heatmap — Top Features + Target")
     fig.tight_layout()
-    fig.savefig(os.path.join(VISUALS_EDA, "04_correlation_heatmap.png"), dpi=150)
+    fig.savefig(os.path.join(VISUALS_EDA, "07_correlation_heatmap.png"), dpi=150)
     plt.close()
-    print("[EDA] Saved → 04_correlation_heatmap.png")
+    print("[EDA] Saved → 07_correlation_heatmap.png")
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -260,11 +335,14 @@ if __name__ == "__main__":
     xgb_df = get_xgb_importance(X, X_train, X_test, y_train, y_test, top_n=10)
 
     # Compare
-    agreed, rf_only, xgb_only, comparison = compare_models(rf_df, xgb_df, df)
+    agreed, features = compare_models(rf_df, xgb_df)
 
     # Plots
     plot_importance_comparison(rf_df, xgb_df)
-    plot_agreed_distributions(df, agreed)
-    plot_correlation_heatmap(df, agreed)
+    plot_boxplots(df, features)
+    plot_bad_rate_by_decile(df, features)
+    plot_mean_by_target(df, features)
+    plot_cumulative_bad_rate(df, features)
+    plot_correlation_heatmap(df, features)
 
     print("\n[EDA] Complete! All plots saved to visuals/EDA/")
