@@ -1,12 +1,13 @@
 import os
-import pandas as pd
-import numpy as np
+import joblib
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 DATA_RAW_APP_TRAIN = "data/raw/application_train.csv"
 DATA_CLEAN_PATH = "data/clean"
 VISUALS_EDA = "visuals/EDA"
+MODELS_DIR = "models"
 
+os.makedirs(MODELS_DIR, exist_ok=True)
 # ── Audit ─────────────────────────────────────────────────────────────────────
 def data_audit(df):
     print("\nData Shape:", df.shape)
@@ -21,3 +22,12 @@ def data_audit(df):
     for col in df.select_dtypes(include='object'):
         print(f"\nUnique values in {col}:", df[col].dropna().unique())
 
+
+def save_model(model, name):
+    path = os.path.join(MODELS_DIR, f"{name}.joblib")
+    joblib.dump(model, path)
+    print(f"[helper] Model saved → {path}")
+    return path
+
+# TODO: for champion and challenger problem
+# def load_model():
