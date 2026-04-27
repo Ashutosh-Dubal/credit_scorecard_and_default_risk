@@ -10,7 +10,7 @@ WOE_PKL     = os.path.join(DATA_CLEAN_PATH, "woe_encoded.parquet")
 WOE_CSV     = os.path.join(DATA_CLEAN_PATH, "woe_encoded.csv")
 IV_CSV      = os.path.join(DATA_CLEAN_PATH, "iv_summary.csv")
 
-# IV threshold — features below this are dropped
+# IV threshold, features below this are dropped
 IV_MIN      = 0.02
 # Max bins per continuous feature
 MAX_BINS    = 10
@@ -61,7 +61,7 @@ def fit_binning_process(df, num_cols, cat_cols, target_col="target"):
     bp.fit(X, y)
     print("[FE] BinningProcess fitted successfully")
 
-    # Save the fitted process — needed later for scoring new applicants
+    # Save the fitted process
     save_model(bp, "binning_process")
 
     return bp, all_cols
@@ -148,12 +148,22 @@ def save_woe_dataset(df_woe):
     print(f"\n[FE] Saved parquet → {WOE_PKL}")
     print(f"[FE] Saved CSV     → {WOE_CSV}")
 
-
 # ── Main ──────────────────────────────────────────────────────────────────────
+
+# Drop raw day columns, engineered versions are more interpretable
+REDUNDANT_COLS = ["DAYS_BIRTH", "DAYS_EMPLOYED"]
+
+def drop_redundant(df):
+    to_drop = [c for c in REDUNDANT_COLS if c in df.columns]
+    df.drop(columns=to_drop, inplace=True)
+    print(f"[FE] Dropped {len(to_drop)} redundant raw columns: {to_drop}")
+    return df
+
 if __name__ == "__main__":
 
     # 1. Load
     df = load_clean()
+    df = drop_redundant(df)
 
     # 2. Split feature types
     num_cols, cat_cols = split_feature_types(df)
