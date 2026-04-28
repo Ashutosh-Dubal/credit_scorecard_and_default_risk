@@ -1,2 +1,16 @@
 .idea/
 .DS_Store
+
+# Data files
+data/raw/*.csv
+data/raw/*.zip
+data/clean/*.csv
+data/clean/*.parquet
+
+# Model artifacts
+models/*.joblib
+models/*.pkl
+
+# Python cache
+scripts/__pycache__/
+venv/

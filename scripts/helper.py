@@ -29,5 +29,6 @@ def save_model(model, name):
     print(f"[helper] Model saved → {path}")
     return path
 
-# TODO: for champion and challenger problem
-# def load_model():
+def load_model(name):
+    path = os.path.join(MODELS_DIR, f"{name}.joblib")
+    return joblib.load(path)

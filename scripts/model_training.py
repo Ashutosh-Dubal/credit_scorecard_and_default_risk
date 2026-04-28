@@ -1,132 +1,145 @@
-"""
-model_training.py — Train Logistic Regression Scorecard (champion) + XGBoost (challenger).
-
-Steps:
-  1. Load WoE-encoded dataset
-  2. Stratified 80/20 train-test split
-  3. Fit Logistic Regression → convert to points-based scorecard
-  4. Fit XGBoost with early stopping
-  5. Evaluate both models (AUC, Gini, KS)
-  6. Save artefacts + evaluation plots
-
-Scorecard scaling:
-  Score = Offset + Factor × log(odds)
-  Factor = PDO / ln(2)      (PDO = points to double the odds)
-  Offset = Base_score − Factor × ln(Base_odds)
-"""
-
-import os
-import sys
-import numpy as np
 import pandas as pd
-
-from sklearn.linear_model  import LogisticRegression
+import numpy as np
+import os
+from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing  import StandardScaler
-from sklearn.pipeline       import Pipeline
-import xgboost as xgb
+from sklearn.metrics import roc_auc_score
+from xgboost import XGBClassifier
+from helper import DATA_CLEAN_PATH, save_model, load_model
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from scripts.helper import (
-    DATA_CLEAN, VIS_EVAL, VIS_SCORE,
-    save_model, print_metrics,
-    plot_roc, plot_ks, plot_score_distribution,
-)
-
-WOE_PKL = os.path.join(DATA_CLEAN, "woe_encoded.parquet")
+# ── Paths ─────────────────────────────────────────────────────────────────────
+WOE_PKL = os.path.join(DATA_CLEAN_PATH, "woe_encoded.parquet")
 
 # ── Scorecard scaling parameters ──────────────────────────────────────────────
-BASE_SCORE = 600    # score that corresponds to base odds
-BASE_ODDS  = 50     # good-to-bad ratio at base score
-PDO        = 20     # points to double the odds
+BASE_SCORE = 600   # score assigned at base odds
+BASE_ODDS  = 50    # good:bad ratio at base score
+PDO        = 20    # points to double the odds
 
-RANDOM_STATE = 42
+# ── Train/test split parameters ───────────────────────────────────────────────
 TEST_SIZE    = 0.20
+RANDOM_STATE = 42
 
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
-def load_woe() -> tuple:
+# ── 1. Load WoE Encoded Data ──────────────────────────────────────────────────
+def load_woe():
+    print("[MT] Loading WoE encoded dataset ...")
     df = pd.read_parquet(WOE_PKL)
-    y  = df["target"].values
-    X  = df.drop(columns=["target"])
-    print(f"[train] WoE dataset: {X.shape[0]:,} rows × {X.shape[1]} features")
-    return X, y
+    print(f"[MT] Shape: {df.shape}")
+    print(f"[MT] Bad rate: {df['target'].mean():.2%}")
+    return df
 
 
-def scale_scorecard(model: LogisticRegression, feature_names: list, scaler: StandardScaler):
-    """Return a DataFrame of feature-level scorecard points."""
+# ── 2. Train/Test Split ───────────────────────────────────────────────────────
+def split_data(df, target_col="target"):
+    X = df.drop(columns=[target_col])
+    y = df[target_col]
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y,
+        test_size=TEST_SIZE,
+        stratify=y,
+        random_state=RANDOM_STATE
+    )
+
+    print(f"\n[MT] Train: {X_train.shape[0]:,} rows  "
+          f"Bad rate: {y_train.mean():.2%}")
+    print(f"[MT] Test : {X_test.shape[0]:,} rows  "
+          f"Bad rate: {y_test.mean():.2%}")
+
+    return X_train, X_test, y_train, y_test
+
+
+# ── 3. Logistic Regression Scorecard (Champion) ───────────────────────────────
+def train_logistic(X_train, X_test, y_train, y_test):
+    print("\n[MT] ── Training Logistic Regression Scorecard ──────────")
+
+    lr = LogisticRegression(
+        max_iter=1000,
+        class_weight="balanced",
+        C=0.1,
+        solver="lbfgs",
+        random_state=RANDOM_STATE
+    )
+    lr.fit(X_train, y_train)
+
+    # Probabilities
+    train_proba = lr.predict_proba(X_train)[:, 1]
+    test_proba  = lr.predict_proba(X_test)[:, 1]
+
+    # Metrics
+    train_auc = roc_auc_score(y_train, train_proba)
+    test_auc  = roc_auc_score(y_test,  test_proba)
+    train_gini = 2 * train_auc - 1
+    test_gini  = 2 * test_auc  - 1
+
+    print(f"[MT] Train AUC : {train_auc:.4f}  Gini: {train_gini:.4f}")
+    print(f"[MT] Test  AUC : {test_auc:.4f}  Gini: {test_gini:.4f}")
+
+    # Overfit check
+    gini_gap = train_gini - test_gini
+    if gini_gap > 0.05:
+        print(f"[MT] WARNING: Gini gap of {gini_gap:.4f} suggests overfitting")
+    else:
+        print(f"[MT] Gini gap: {gini_gap:.4f} — no significant overfitting")
+
+    # Scorecard scaling
+    scorecard_df = build_scorecard(lr, X_train.columns.tolist())
+    print("\n[MT] Scorecard points (top 10 features):")
+    print(scorecard_df.head(10).to_string(index=False))
+
+    # Convert probabilities to scores
+    train_scores = proba_to_score(train_proba)
+    test_scores  = proba_to_score(test_proba)
+
+    print(f"\n[MT] Score distribution (test set):")
+    print(f"     Mean  : {test_scores.mean():.1f}")
+    print(f"     Std   : {test_scores.std():.1f}")
+    print(f"     Min   : {test_scores.min():.1f}")
+    print(f"     Max   : {test_scores.max():.1f}")
+
+    save_model(lr, "lr_scorecard")
+
+    return lr, test_proba, test_scores, {"model": "LR Scorecard",
+                                          "AUC": test_auc,
+                                          "Gini": test_gini}
+
+
+# ── 4. Scorecard Scaling ──────────────────────────────────────────────────────
+def build_scorecard(lr, feature_names):
     factor = PDO / np.log(2)
     offset = BASE_SCORE - factor * np.log(BASE_ODDS)
 
-    coefs = model.coef_[0]
-    intercept = model.intercept_[0]
-
     rows = []
-    for name, coef in zip(feature_names, coefs):
-        # Un-scale coefficient back to original WoE space
-        coef_orig = coef / scaler.scale_[feature_names.index(name)]
-        points = -factor * coef_orig
-        rows.append({"feature": name, "coefficient": coef_orig, "points_per_WoE_unit": points})
+    for feature, coef in zip(feature_names, lr.coef_[0]):
+        # Points contribution per unit of WoE for this feature
+        points = -factor * coef
+        rows.append({
+            "feature":     feature,
+            "coefficient": round(coef, 4),
+            "points":      round(points, 2)
+        })
 
-    df_sc = pd.DataFrame(rows)
-    df_sc["intercept_contribution"] = -factor * intercept / len(feature_names)
-    return df_sc, factor, offset
-
-
-# ── Model 1: Logistic Regression Scorecard ────────────────────────────────────
-
-def train_logistic(X_train, y_train, X_test, y_test, feature_names):
-    print("\n[train] ─── Logistic Regression Scorecard ───")
-    pipe = Pipeline([
-        ("scaler", StandardScaler()),
-        ("lr", LogisticRegression(
-            max_iter=1000,
-            class_weight="balanced",
-            C=0.1,
-            solver="lbfgs",
-            random_state=RANDOM_STATE,
-        )),
-    ])
-    pipe.fit(X_train, y_train)
-
-    proba_train = pipe.predict_proba(X_train)[:, 1]
-    proba_test  = pipe.predict_proba(X_test)[:, 1]
-
-    metrics_train = print_metrics(y_train, proba_train, "LR Scorecard — Train")
-    metrics_test  = print_metrics(y_test,  proba_test,  "LR Scorecard — Test")
-
-    # Scorecard points
-    scaler  = pipe.named_steps["scaler"]
-    lr_model = pipe.named_steps["lr"]
-    sc_df, factor, offset = scale_scorecard(lr_model, list(feature_names), scaler)
-    print("\n[train] Scorecard points (top 10):")
-    print(sc_df.head(10).to_string(index=False))
-
-    # Convert probability to score  →  score = offset + factor * ln(p_good / p_bad)
-    eps   = 1e-8
-    score = offset + factor * np.log((1 - proba_test + eps) / (proba_test + eps))
-
-    # Plots
-    plot_roc(y_test, proba_test,  "LR Scorecard",
-             save_path=os.path.join(VIS_EVAL, "lr_roc.png"))
-    plot_ks(y_test,  proba_test,  "LR Scorecard",
-            save_path=os.path.join(VIS_EVAL, "lr_ks.png"))
-    plot_score_distribution(score, y_test,
-                            save_path=os.path.join(VIS_SCORE, "lr_score_dist.png"))
-
-    save_model(pipe, "lr_scorecard")
-    return pipe, proba_test, score, metrics_test
+    scorecard_df = (pd.DataFrame(rows)
+                      .sort_values("points", ascending=False)
+                      .reset_index(drop=True))
+    return scorecard_df
 
 
-# ── Model 2: XGBoost ──────────────────────────────────────────────────────────
+def proba_to_score(proba, eps=1e-8):
+    factor = PDO / np.log(2)
+    offset = BASE_SCORE - factor * np.log(BASE_ODDS)
+    odds   = (1 - proba + eps) / (proba + eps)
+    scores = offset + factor * np.log(odds)
+    return pd.Series(scores)
 
-def train_xgboost(X_train, y_train, X_test, y_test):
-    print("\n[train] ─── XGBoost ───")
+
+# ── 5. XGBoost Challenger ─────────────────────────────────────────────────────
+def train_xgboost(X_train, X_test, y_train, y_test):
+    print("\n[MT] ── Training XGBoost Challenger ──────────────────────")
 
     scale_pos = int((y_train == 0).sum() / (y_train == 1).sum())
+    print(f"[MT] scale_pos_weight: {scale_pos}")
 
-    model = xgb.XGBClassifier(
+    xgb = XGBClassifier(
         n_estimators=500,
         learning_rate=0.05,
         max_depth=5,
@@ -136,58 +149,75 @@ def train_xgboost(X_train, y_train, X_test, y_test):
         eval_metric="auc",
         early_stopping_rounds=30,
         random_state=RANDOM_STATE,
-        use_label_encoder=False,
+        verbosity=0
     )
 
-    model.fit(
+    xgb.fit(
         X_train, y_train,
         eval_set=[(X_test, y_test)],
-        verbose=50,
+        verbose=50
     )
 
-    proba_test = model.predict_proba(X_test)[:, 1]
-    metrics_test = print_metrics(y_test, proba_test, "XGBoost — Test")
+    test_proba = xgb.predict_proba(X_test)[:, 1]
+    test_auc   = roc_auc_score(y_test, test_proba)
+    test_gini  = 2 * test_auc - 1
 
-    # Plots
-    plot_roc(y_test, proba_test,  "XGBoost",
-             save_path=os.path.join(VIS_EVAL, "xgb_roc.png"))
-    plot_ks(y_test,  proba_test,  "XGBoost",
-            save_path=os.path.join(VIS_EVAL, "xgb_ks.png"))
-    plot_score_distribution(proba_test, y_test,
-                            save_path=os.path.join(VIS_SCORE, "xgb_score_dist.png"))
+    train_proba = xgb.predict_proba(X_train)[:, 1]
+    train_auc   = roc_auc_score(y_train, train_proba)
+    train_gini  = 2 * train_auc - 1
 
-    save_model(model, "xgboost_challenger")
-    return model, proba_test, metrics_test
+    print(f"[MT] Train AUC : {train_auc:.4f}  Gini: {train_gini:.4f}")
+    print(f"[MT] Test  AUC : {test_auc:.4f}  Gini: {test_gini:.4f}")
+
+    gini_gap = train_gini - test_gini
+    if gini_gap > 0.05:
+        print(f"[MT] WARNING: Gini gap of {gini_gap:.4f} suggests overfitting")
+    else:
+        print(f"[MT] Gini gap: {gini_gap:.4f} — no significant overfitting")
+
+    save_model(xgb, "xgboost_challenger")
+
+    return xgb, test_proba, {"model": "XGBoost",
+                              "AUC": test_auc,
+                              "Gini": test_gini}
+
+# ── 6. Summary Table ──────────────────────────────────────────────────────────
+def print_summary(lr_metrics, xgb_metrics):
+    summary = pd.DataFrame([lr_metrics, xgb_metrics])
+    print("\n[MT] ══ Model Comparison Summary ═════════════════════════")
+    print(summary.to_string(index=False))
+    print("══════════════════════════════════════════════════════════")
+
+    # Benchmark check
+    for _, row in summary.iterrows():
+        gini_ok = "✅" if row["Gini"] >= 0.45 else "❌"
+        auc_ok  = "✅" if row["AUC"]  >= 0.75 else "❌"
+        print(f"  {row['model']:<25} "
+              f"Gini {gini_ok} {row['Gini']:.4f}   "
+              f"AUC {auc_ok} {row['AUC']:.4f}")
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
-
-def main():
-    X, y = load_woe()
-    feature_names = X.columns.tolist()
-
-    X_train, X_test, y_train, y_test = train_test_split(
-        X.values, y, test_size=TEST_SIZE,
-        stratify=y, random_state=RANDOM_STATE
-    )
-    print(f"[train] Train: {X_train.shape[0]:,}  Test: {X_test.shape[0]:,}")
-    print(f"[train] Bad rate — train: {y_train.mean():.2%}  test: {y_test.mean():.2%}")
-
-    lr_pipe, lr_proba, lr_score, lr_metrics = train_logistic(
-        X_train, y_train, X_test, y_test, feature_names
-    )
-    xgb_model, xgb_proba, xgb_metrics = train_xgboost(
-        X_train, y_train, X_test, y_test
-    )
-
-    # Summary table
-    summary = pd.DataFrame([lr_metrics, xgb_metrics])
-    print("\n[train] ══ Final comparison ══")
-    print(summary.to_string(index=False))
-    summary.to_csv(os.path.join(VIS_EVAL, "model_comparison.csv"), index=False)
-
-    print("\n[train] Training complete. All artefacts saved.")
-
-
 if __name__ == "__main__":
-    main()
+
+    # 1. Load
+    df = load_woe()
+
+    # 2. Split
+    X_train, X_test, y_train, y_test = split_data(df)
+
+    # 3. Train champion — Logistic Regression Scorecard
+    lr, lr_proba, lr_scores, lr_metrics = train_logistic(
+        X_train, X_test, y_train, y_test
+    )
+
+    # 4. Train challenger — XGBoost
+    xgb, xgb_proba, xgb_metrics = train_xgboost(
+        X_train, X_test, y_train, y_test
+    )
+
+    # 5. Summary
+    print_summary(lr_metrics, xgb_metrics)
+
+    print("\n[MT] Training complete!")
+    print(f"[MT] Models saved to: models/")
