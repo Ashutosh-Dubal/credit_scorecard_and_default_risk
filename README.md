@@ -15,10 +15,15 @@
 
 ---
 
-TODO: clean up - 1. Challenges and Learning section
+```
+TODO: clean up - 1. Challenges and Learning section - DONE
                  2. IV results
-LAST_TODO: 1. double check project structure
-           2. Add all links to Table of content 
+                 3. EDA  
+
+FINAL_TODO: 1. double check project structure - DONE
+            2. Add all links to Table of content 
+            
+```
 
 ---
 
@@ -108,7 +113,7 @@ Before analysis the raw data was cleaned through the following steps:
 
 ## 🧠 Challenges & Learnings
 
-**Feature selection with 122 variables**  
+1. **Feature selection with 122 variables**  
 After cleaning the data and starting EDA it became clear that 122 variables 
 was too many to analyse meaningfully. I needed a systematic way to identify 
 the most predictive features before building any model. There are three broad 
@@ -120,7 +125,7 @@ with WoE encoding. LASSO was ruled out because it cannot capture non-linear
 relationships. SHAP values are planned for Phase 2 as they are better suited 
 for post-model explainability than pre-model feature selection.
 
-**Comparing feature importance across different methods**  
+2. **Comparing feature importance across different methods**  
 The RF permutation importance and XGBoost importance scores are on completely 
 different scales — you cannot compare 0.008 from RF with 0.111 from XGBoost 
 directly. The solution was a rank-based comparison system that converts both 
@@ -128,7 +133,7 @@ sets of scores into positions (rank 1 to 10) and averages them. Features that
 both models agreed on rose to the top with high confidence. Features only one 
 model found important received penalty ranks, naturally pushing them lower.
 
-**Architecture mismatch on Apple Silicon**  
+3. **Architecture mismatch on Apple Silicon**  
 Running Python 3.9 under Rosetta (x86_64 emulation) caused numpy and XGBoost 
 to fail due to incompatible binary architectures. The fix was rebuilding the 
 virtual environment using the native ARM64 system Python at `/usr/bin/python3` 
@@ -142,22 +147,27 @@ installation at `/opt/homebrew`.
 ### Exploratory Data Analysis (EDA)
 
 #### Graph 1 — Target Distribution
+
+![Target Distribution](/visuals/EDA/01_target_distribution.png)
+
    The story here is simple but critical — our dataset is heavily imbalanced. Out of 307,511 borrowers, only 24,825 defaulted. That's roughly 1 in 12. 
    This tells you that the majority of people in this dataset are reliable borrowers, and your model has far fewer examples of the "bad" behaviour 
    it needs to detect. This is why accuracy alone is a misleading metric — a model that just says "everyone is fine" would be right 92% of the time 
    without learning anything useful.
 
-   ![Target Distribution](/visuals/EDA/01_target_distribution.png)
-
 #### Graph 2 — RF vs XGBoost Importance
+
+![RF vs XGB](/visuals/EDA/02_rf_vs_xgb_importance.png)
+
    This is the casting call for our story. Both models unanimously agree that EXT_SOURCE_2 and EXT_SOURCE_3 are the two most important characters. 
    Everything else is a supporting cast. The gap between the external scores and the rest of the features is massive — look at how the RF bars drop  
    off a cliff after EXT_SOURCE_3. This tells you that whoever these external credit bureaus are, they've already done a lot of the risk assessment 
    work for us.
 
-   ![RF vs XGB](/visuals/EDA/02_rf_vs_xgb_importance.png)
-
 #### Graph 3 — Box Plots
+
+![Boxplots](/visuals/EDA/03_boxplots_by_target.png)
+
    This is where the story starts getting personal. Look at EXT_SOURCE_2 and EXT_SOURCE_3 specifically. The box for non-defaulters (0) sits noticeably 
    higher than the box for defaulters (1) — meaning people who repaid their loans consistently had higher external credit scores. The separation is clear 
    and clean. Now look at DAYS_EMPLOYED — both boxes are negative because it's stored as days (negative numbers mean further in the past). The 
@@ -165,9 +175,10 @@ installation at `/opt/homebrew`.
    DEF_30_CNT_SOCIAL_CIRCLE tells an interesting social story — it barely moves between defaulters and non-defaulters, suggesting that knowing someone 
    who defaulted in the last 30 days isn't as predictive as the other features.
 
-   ![Boxplots](/visuals/EDA/03_boxplots_by_target.png)
-
 #### Graph 4 — Bad Rate by Decile
+
+![Bad Rate](/visuals/EDA/04_bad_rate_by_decile.png)
+
    This is the most important graph for our project. Let me walk you through the key characters:
 
    EXT_SOURCE_2 — read it left to right. D1 (lowest scores) has a bad rate of about 17-18%. By D10 (highest scores) it drops to about 2-3%. That is a 
@@ -187,9 +198,10 @@ installation at `/opt/homebrew`.
    DAYS_EMPLOYED — the most interesting one here. The bad rate actually increases as you go from D1 to D10 — meaning longer employed people default less, 
    and shorter-employed or recently employed people default more. The spike at D5 is worth noting — could be an artefact of the data distribution.
 
-   ![Bad Rate](/visuals/EDA/04_bad_rate_by_decile.png)
-
 #### Graph 5 — Normalised Mean by Target
+
+![Normalised Mean](/visuals/EDA/05_mean_by_target.png)
+
    This is your quick summary card. For every feature it shows whether defaulters or non-defaulters have a higher average value. The key insights:
 
    EXT_SOURCE_2 and EXT_SOURCE_3 — non-defaulters (blue) are clearly taller, confirming higher scores = lower risk.
@@ -200,9 +212,10 @@ installation at `/opt/homebrew`.
    DEF_30_CNT_SOCIAL_CIRCLE and AMT_ANNUITY — defaulters have slightly higher values, meaning higher social circle defaults and higher loan repayment amounts 
    correlate with default.
 
-   ![Normalised Mean](/visuals/EDA/05_mean_by_target.png)
-
 #### Graph 6 — Cumulative Bad Rate
+
+![Cumulative Bad Rate](/visuals/EDA/06_cumulative_bad_rate.png)
+
    This is the preview of your model's power before you've even built it. Think of it this way — imagine you lined up all 307K borrowers ranked from lowest to 
    highest EXT_SOURCE_2 score. If you stopped at the worst 20% of borrowers, how many of the total defaults would you have captured?
 
@@ -215,15 +228,14 @@ installation at `/opt/homebrew`.
    For DAYS_EMPLOYED — the curve goes below the diagonal at first then crosses back. That U-shape means it's predictive but in a non-linear way — the relationship 
    reverses at some point, which is exactly why WoE binning needs to handle it carefully.
 
-   ![Cumulative Bad Rate](/visuals/EDA/06_cumulative_bad_rate.png)
-
 #### Graph 7 — Correlation Heatmap
+
+![Correlation Heatmap](/visuals/EDA/07_correlation_heatmap.png)
+
    Two things jump out. First ANNUITY_TO_INCOME and AMT_ANNUITY have a correlation of 0.51 with each other — that's moderate multicollinearity. They're both 
    measuring something about loan repayment burden relative to income, so they're telling a similar story. IV filtering will help decide which one to keep. 
    Second AMT_INCOME_TOTAL and AMT_ANNUITY also correlate at 0.48 — again related concepts. None of these are dangerously high (above 0.70 would be a problem) 
    but worth noting.
-
-   ![Correlation Heatmap](/visuals/EDA/07_correlation_heatmap.png)
 
 ### IV Results
 
@@ -257,7 +269,6 @@ Prior to the start of the project I had set the data retention rate at 75%, star
 37/54 = 68.5% this is lower but its close to 75%. However we initially started with 122 features which is 34/122 = 30%. The correct
 interpretation for our benchmark is retention after IV filtering of cleaned features and the 17 dropped features are genuinly low signal 
 so losing them makes the model better, not worse.
-
 
 ---
 
