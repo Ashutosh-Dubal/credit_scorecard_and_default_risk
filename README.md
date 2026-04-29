@@ -108,17 +108,32 @@ Before analysis the raw data was cleaned through the following steps:
 
 ## 🧠 Challenges & Learnings
 
--> After cleaning the data I had just started the EDA when I realized that there are way too many variables(looking at the data description).
-   So I needed a way to reduce the number of variables, I started to work on top 10 features that would contribute to helping us predict weather
-   or not someone would default on a loan or not. There are sevreal methods we can use for feature selection, 3 broad classifications are
-   Statistical methods, ML methods and Credit Risk Specific. I used XGBoost, Random Forest and Permutaion importance all three of these fall 
-   ML methods. In ML we have a couple more like Recursive feature elimination(RFE), LASSO regularisation and SHAP values In this project we will not 
-   use RFE and LASSO since this is the wrong use case for RFE and LASSO will not be able to see non-linear relationships. SHAP values on the
-   other hand will be more useful for after we build a model espeacially with XGBoost model. It would help us answer 2 very important questions
-   Explain why individual borrowers were flagged as high risk and Validate that the model is using features in a sensible direction. Now the 
+**Feature selection with 122 variables**  
+After cleaning the data and starting EDA it became clear that 122 variables 
+was too many to analyse meaningfully. I needed a systematic way to identify 
+the most predictive features before building any model. There are three broad 
+categories of feature selection methods: Statistical, Machine Learning, and 
+Credit Risk Specific. For this project I used Random Forest with permutation 
+importance and XGBoost feature importance, both falling under ML methods. 
+RFE was ruled out as it is too slow for 300K rows and does not interact well 
+with WoE encoding. LASSO was ruled out because it cannot capture non-linear 
+relationships. SHAP values are planned for Phase 2 as they are better suited 
+for post-model explainability than pre-model feature selection.
 
--> The 2 sets of variables we got at feature selection step can be put into one list together with the help of a ranking system since we cant
-   directly compare the importance scroes we get from XGBoost method and Random Forest + permutaion importance method
+**Comparing feature importance across different methods**  
+The RF permutation importance and XGBoost importance scores are on completely 
+different scales — you cannot compare 0.008 from RF with 0.111 from XGBoost 
+directly. The solution was a rank-based comparison system that converts both 
+sets of scores into positions (rank 1 to 10) and averages them. Features that 
+both models agreed on rose to the top with high confidence. Features only one 
+model found important received penalty ranks, naturally pushing them lower.
+
+**Architecture mismatch on Apple Silicon**  
+Running Python 3.9 under Rosetta (x86_64 emulation) caused numpy and XGBoost 
+to fail due to incompatible binary architectures. The fix was rebuilding the 
+virtual environment using the native ARM64 system Python at `/usr/bin/python3` 
+and installing a native ARM64 version of libomp via a native ARM Homebrew 
+installation at `/opt/homebrew`.
 
 ---
 
@@ -248,46 +263,160 @@ so losing them makes the model better, not worse.
 
 ## 🎯 Prediction & Evaluation
 
+### Modelling Approach
+
+Two models were trained on the WoE-encoded dataset using a stratified 80/20 
+train-test split — stratified to preserve the 8.07% bad rate in both sets.
+
+**Champion — Logistic Regression Scorecard**  
+The industry standard for credit risk. WoE encoding linearises all features 
+so logistic regression works optimally. Coefficients are converted into 
+interpretable score points using standard scorecard scaling:
+
+Factor = PDO / ln(2) = 20 / 0.693 = 28.85
+Offset = Base_score − Factor × ln(Base_odds) = 600 − 28.85 × ln(50) = 487
+Score  = Offset + Factor × ln(odds of repayment)
+
+- Base score: 600 | Base odds: 50:1 | PDO: 20
+- `class_weight="balanced"` handles the 8:92 class imbalance
+- `C=0.1` applies L2 regularisation to prevent overfitting
+
+**Challenger — XGBoost**  
+A gradient boosted tree model used as a performance benchmark. 
+`scale_pos_weight=11` handles class imbalance. Early stopping at round 235 
+prevented overfitting.
+
+---
+
+### Results
+
+| Model | AUC | Gini | KS | Overfit Gap |
+|---|---|---|---|---|
+| LR Scorecard (Champion) | 0.7453 | 0.4905 | 0.3617 | -0.0054 ✅ |
+| XGBoost (Challenger) | 0.7511 | 0.5021 | 0.3730 | 0.0430 ✅ |
+
+**Score distribution (LR Scorecard on test set):**
+
+| Stat | Value |
+|---|---|
+| Mean score | 497.2 |
+| Std deviation | 26.6 |
+| Min score | 394.8 |
+| Max score | 593.2 |
+
+---
+
+### Champion vs Challenger
+
+| Metric | Delta (XGBoost − LR) |
+|---|---|
+| ΔAUC | +0.0058 |
+| ΔGini | +0.0116 |
+| ΔKS | +0.0113 |
+| PSI between models | 0.0131 → Similar distributions |
+
+**Recommendation: Retain LR Scorecard as Champion.**  
+XGBoost shows marginal improvement across all metrics but the performance 
+gap (ΔAUC = 0.006) is well below the 0.02 threshold that would justify 
+replacing an interpretable champion model. Both models score the population 
+similarly (PSI = 0.013), confirming they capture the same underlying signal.
+
+![ROC Curves](/visuals/model_evaluation/01_roc_curves.png)
+![KS Curves](/visuals/model_evaluation/02_ks_curves.png)
+![Score Distributions](/visuals/model_evaluation/03_score_distributions.png)
+![Metric Comparison](/visuals/model_evaluation/04_metric_comparison.png)
+
 ---
 
 ## 🧩 Model Interpretation
+
+### Logistic Regression Scorecard — Top Features by Points
+
+Each feature contributes a fixed number of points to the total credit score. 
+Higher points = lower default risk for that feature's WoE bin.
+
+| Rank | Feature | Points |
+|---|---|---|
+| 1 | `EXT_SOURCE_3` | 24.49 |
+| 2 | `NAME_CONTRACT_TYPE` | 23.70 |
+| 3 | `EXT_SOURCE_2` | 21.59 |
+| 4 | `AMT_GOODS_PRICE` | 18.85 |
+| 5 | `CODE_GENDER` | 17.67 |
+| 6 | `NAME_EDUCATION_TYPE` | 17.37 |
+| 7 | `CREDIT_TO_GOODS` | 15.60 |
+| 8 | `DEF_60_CNT_SOCIAL_CIRCLE` | 11.44 |
+| 9 | `ORGANIZATION_TYPE` | 11.24 |
+| 10 | `DEF_30_CNT_SOCIAL_CIRCLE` | 10.91 |
+
+### How the Scorecard Works
+A borrower's total credit score is the sum of points from every feature 
+based on which WoE bin their value falls into. For example:
+
+- A borrower with high `EXT_SOURCE_3` falls in a positive WoE bin → gains points
+- A borrower with high `CREDIT_TO_GOODS` falls in a negative WoE bin → loses points
+- The total determines their final score on a 394–593 scale
+
+**Score interpretation:**
+- Higher score → lower predicted probability of default → lower risk
+- Lower score → higher predicted probability of default → higher risk
+
+### Why Logistic Regression Over XGBoost?
+| Consideration | LR Scorecard | XGBoost |
+|---|---|---|
+| Performance gap | Baseline | +0.006 AUC |
+| Interpretability | Full — points per feature | Requires SHAP |
+| Regulatory compliance | ✅ Directly explainable | ⚠️ Harder to audit |
+| Deployment | Simple scoring table | Requires model file |
+
+The marginal performance gain from XGBoost does not justify the loss of 
+interpretability. In a regulated banking environment the LR Scorecard is 
+the appropriate champion model.
+
+### Planned — SHAP Explainability (Phase 2)
+SHAP (SHapley Additive exPlanations) will be added in Phase 2 to explain 
+individual XGBoost predictions. This will answer two key questions:
+- Why was this specific borrower flagged as high risk?
+- Is the model using features in a sensible, expected direction?
 
 ---
 
 ## 🔧 Tech Stack
 
-This project is built with: Python 3.9
+**Language:** Python 3.9 (ARM64 native on Apple Silicon)
 
-Data Processing & Analysis: pandas, numpy
-
-Visualization: matplotlib, seaborn
-
-Modeling (planned): scikit-learn (Random Forest, Logistic Regression, Gradient Boosting, etc.)
-
-Project Organization: git & GitHub for version control
+| Category | Libraries |
+|---|---|
+| Data processing | `pandas`, `numpy` |
+| Machine learning | `scikit-learn`, `xgboost` |
+| WoE / IV binning | `optbinning` |
+| Visualisation | `matplotlib`, `seaborn` |
+| Model serialisation | `joblib` |
+| Data storage | `pyarrow` (parquet format) |
+| Data acquisition | `kagglehub` |
+| Version control | `git`, GitHub |
 
 ---
 
 ## Project Structure
 
 ```
-credit-scorecard-default-risk/
+credit_scorecard_and_default_risk/
 ├── data/
-│   ├── raw/          # 
-│   └── clean/        # 
+│   ├── raw/          # Raw CSV from Kaggle (not committed — run fetch_data.py)
+│   └── clean/        # WoE-encoded parquet files (not committed — run pipeline)
 ├── scripts/
-│   ├── fetch_data.py            # 
-│   ├── clean_data.py            # 
-│   ├── EDA.py                   # 
-│   ├── feature_engineering.py   # 
-│   ├── model_training.py        # 
-│   ├── champion_challenger.py   # 
-│   └── helper.py                # 
+│   ├── fetch_data.py            # Downloads Home Credit dataset from Kaggle
+│   ├── clean_data.py            # Cleaning, imputation, feature engineering
+│   ├── EDA.py                   # Feature importance, decile plots, heatmaps
+│   ├── feature_engineering.py   # WoE/IV binning and feature selection
+│   ├── model_training.py        # LR Scorecard + XGBoost training
+│   ├── champion_challenger.py   # A/B model comparison and recommendation
+│   └── helper.py                # Shared utilities, paths, model I/O
 ├── visuals/
-│   ├── EDA/                     # 
-│   ├── score_distribution/      #
-│   └── model_evaluation/        # 
-├── models/                      # 
+│   ├── EDA/                     # Feature importance, distribution, heatmap plots
+│   ├── score_distribution/      # Score histogram by target class
+│   └── model_evaluation/        # ROC, KS, metric comparison plots
+├── models/                      # Saved model artifacts (not committed)
 ├── LICENSE
 ├── README.md
 └── .gitignore

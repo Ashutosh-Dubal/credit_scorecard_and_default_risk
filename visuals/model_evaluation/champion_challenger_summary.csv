@@ -1,0 +1,3 @@
+Model,AUC,Gini,KS,PSI_vs_champion,PSI_label,recommendation
+LR Scorecard (Champion),0.7453,0.4905,0.3617,0.0,—,XGBoost shows marginal improvement. Retain LR Scorecard as Champion — the performance gain does not justify replacing an interpretable model.
+XGBoost (Challenger),0.7511,0.5021,0.373,0.0131,Similar distributions,—
