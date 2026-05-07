@@ -1,39 +1,5 @@
 # Credit Scorecard & Default Risk Model
 
----
-
-## 📚 Table of Contents  
-1. [Dataset Description]()  
-2. [Challenges & Learnings]()
-3. [Key Insights & Analysis]() 
-4. [Prediction & Evaluation]()
-5. [Model Interpretation]()
-6. [Tech Stack]()  
-7. [Project Structure]()  
-8. [Author]()
-9. [License]()
-
----
-
-```
-TODO: clean up - 1. Challenges and Learning section - DONE
-                 2. IV results
-                 3. EDA  
-
-FINAL_TODO: 1. double check project structure - DONE
-            2. Add all links to Table of content 
-            
-```
-
----
-
-## 📦 Dataset Description
-
-**Source:** [Home Credit Default Risk](https://www.kaggle.com/competitions/home-credit-default-risk) — Kaggle Competition  
-**Provider:** Home Credit Group  
-**File Used:** `application_train.csv`
-
-### Overview
 Home Credit is a consumer finance provider that serves populations who have 
 little to no traditional credit history. The dataset contains 307,511 loan 
 applications with 122 features per applicant covering demographics, financial 
@@ -44,16 +10,37 @@ The core question the dataset is designed to answer is:
 > *Given what we know about a borrower at the time of application, 
 > how likely are they to default on their loan?*
 
+---
+
+## 📚 Table of Contents  
+1. [Dataset Description](https://github.com/Ashutosh-Dubal/credit_scorecard_and_default_risk#-dataset-description)  
+2. [Challenges & Learnings](https://github.com/Ashutosh-Dubal/credit_scorecard_and_default_risk#-challenges--learnings)
+3. [Key Insights & Analysis](https://github.com/Ashutosh-Dubal/credit_scorecard_and_default_risk#-key-insights--analysis) 
+4. [Prediction & Evaluation](https://github.com/Ashutosh-Dubal/credit_scorecard_and_default_risk#-prediction--evaluation)
+5. [Model Interpretation](https://github.com/Ashutosh-Dubal/credit_scorecard_and_default_risk#-model-interpretation)
+6. [Tech Stack](https://github.com/Ashutosh-Dubal/credit_scorecard_and_default_risk#-tech-stack)  
+7. [Project Structure](https://github.com/Ashutosh-Dubal/credit_scorecard_and_default_risk#project-structure)  
+8. [Author](https://github.com/Ashutosh-Dubal/credit_scorecard_and_default_risk#%E2%80%8D-author)
+9. [License](https://github.com/Ashutosh-Dubal/credit_scorecard_and_default_risk#-license)
+
+---
+
+## 📦 Dataset Description
+
+**Source:** [Home Credit Default Risk](https://www.kaggle.com/competitions/home-credit-default-risk) — Kaggle Competition  
+**Provider:** Home Credit Group  
+**File Used:** `application_train.csv`
+
 ### Target Variable
 `TARGET` — Binary default indicator:
 
-| Value | Meaning | Count | Share |
-|---|---|---|---|
-| 0 | Loan repaid — Non-Defaulter | 282,686 | 91.9% |
-| 1 | Payment difficulties — Defaulter | 24,825 | 8.1% |
+| Value | Meaning                          | Count   | Share |
+|-------|----------------------------------|---------|-------|
+| 0     | Loan repaid — Non-Defaulter      | 282,686 | 91.9% |
+| 1     | Payment difficulties — Defaulter | 24,825  | 8.1%  |
 
 The dataset is heavily imbalanced at roughly 1 defaulter for every 11 
-non-defaulters. This makes raw accuracy a misleading success metric — a 
+non-defaulters. This makes raw accuracy a misleading success metric, a 
 model that predicts "no default" for every applicant would be correct 92% 
 of the time without learning anything meaningful. For this reason the 
 primary evaluation metrics used in this project are Gini coefficient and 
@@ -62,31 +49,13 @@ KS statistic rather than accuracy.
 ### Features
 The 122 features fall into 5 broad categories:
 
-| Category | Examples | Count |
-|---|---|---|
-| Demographics | Age, gender, family status, education | ~10 |
-| Financial profile | Income, credit amount, annuity, goods price | ~15 |
-| Employment | Days employed, occupation type, organisation type | ~10 |
-| External credit scores | EXT_SOURCE_1, EXT_SOURCE_2, EXT_SOURCE_3 | 3 |
-| Credit bureau enquiries | AMT_REQ_CREDIT_BUREAU_* (hour/day/week/month/year) | ~10 |
-
-### Top Predictive Features (identified during EDA)
-Through Random Forest permutation importance and XGBoost feature importance 
-combined with a rank-based comparison, the following 10 features were 
-identified as the most influential predictors of default:
-
-| Rank | Feature | Why it matters |
-|---|---|---|
-| 1 | `EXT_SOURCE_2` | External credit bureau score — strongest single predictor |
-| 2 | `EXT_SOURCE_3` | External credit bureau score — confirms EXT_SOURCE_2 signal |
-| 3 | `CREDIT_TO_GOODS` | Loan amount relative to goods price — measures over-borrowing |
-| 4 | `FLAG_OWN_CAR` | Asset ownership — proxy for financial stability |
-| 5 | `ANNUITY_TO_INCOME` | Monthly repayment burden relative to income |
-| 6 | `AMT_INCOME_TOTAL` | Total applicant income |
-| 7 | `DAYS_ID_PUBLISH` | How recently ID was issued — proxy for life stability |
-| 8 | `DEF_30_CNT_SOCIAL_CIRCLE` | Defaults in applicant's social circle |
-| 9 | `AMT_ANNUITY` | Monthly loan repayment amount |
-| 10 | `DAYS_EMPLOYED` | Employment duration — shorter tenure = higher risk |
+| Category                | Examples                                           | Count |
+|-------------------------|----------------------------------------------------|-------|
+| Demographics            | Age, gender, family status, education              | ~10   |
+| Financial profile       | Income, credit amount, annuity, goods price        | ~15   |
+| Employment              | Days employed, occupation type, organisation type  | ~10   |
+| External credit scores  | EXT_SOURCE_1, EXT_SOURCE_2, EXT_SOURCE_3           | 3     |
+| Credit bureau enquiries | AMT_REQ_CREDIT_BUREAU_* (hour/day/week/month/year) | ~10   |
 
 ### Data Cleaning Summary
 Before analysis the raw data was cleaned through the following steps:
@@ -98,6 +67,24 @@ Before analysis the raw data was cleaned through the following steps:
 - Imputed `AMT_REQ_CREDIT_BUREAU_*` missing values with `0` (no bureau activity)
 - Imputed `OWN_CAR_AGE` missing values with `0` (no car)
 - Imputed remaining numeric columns with median and categorical columns with `"Unknown"`
+
+### Top Predictive Features (identified during EDA)
+Through Random Forest permutation importance and XGBoost feature importance 
+combined with a rank-based comparison, the following 10 features were 
+identified as the most influential predictors of default:
+
+| Rank | Feature                    | Why it matters                                                |
+|------|----------------------------|---------------------------------------------------------------|
+| 1    | `EXT_SOURCE_2`             | External credit bureau score — strongest single predictor     |
+| 2    | `EXT_SOURCE_3`             | External credit bureau score — confirms EXT_SOURCE_2 signal   |
+| 3    | `CREDIT_TO_GOODS`          | Loan amount relative to goods price — measures over-borrowing |
+| 4    | `FLAG_OWN_CAR`             | Asset ownership — proxy for financial stability               |
+| 5    | `ANNUITY_TO_INCOME`        | Monthly repayment burden relative to income                   |
+| 6    | `AMT_INCOME_TOTAL`         | Total applicant income                                        |
+| 7    | `DAYS_ID_PUBLISH`          | How recently ID was issued — proxy for life stability         |
+| 8    | `DEF_30_CNT_SOCIAL_CIRCLE` | Defaults in applicant's social circle                         |
+| 9    | `AMT_ANNUITY`              | Monthly loan repayment amount                                 |
+| 10   | `DAYS_EMPLOYED`            | Employment duration — shorter tenure = higher risk            |
 
 ### Engineered Features
 7 derived features were created to capture meaningful financial ratios:
@@ -113,19 +100,21 @@ Before analysis the raw data was cleaned through the following steps:
 
 ## 🧠 Challenges & Learnings
 
-1. **Feature selection with 122 variables**  
+### 1. **Feature selection with 122 variables**  
+
 After cleaning the data and starting EDA it became clear that 122 variables 
-was too many to analyse meaningfully. I needed a systematic way to identify 
+was too many to analyze meaningfully. I needed a systematic way to identify 
 the most predictive features before building any model. There are three broad 
 categories of feature selection methods: Statistical, Machine Learning, and 
 Credit Risk Specific. For this project I used Random Forest with permutation 
 importance and XGBoost feature importance, both falling under ML methods. 
 RFE was ruled out as it is too slow for 300K rows and does not interact well 
 with WoE encoding. LASSO was ruled out because it cannot capture non-linear 
-relationships. SHAP values are planned for Phase 2 as they are better suited 
+relationships. SHAP values are planned for after the model is complete as they are better suited 
 for post-model explainability than pre-model feature selection.
 
-2. **Comparing feature importance across different methods**  
+### 2. **Comparing feature importance across different methods**
+
 The RF permutation importance and XGBoost importance scores are on completely 
 different scales — you cannot compare 0.008 from RF with 0.111 from XGBoost 
 directly. The solution was a rank-based comparison system that converts both 
@@ -133,7 +122,8 @@ sets of scores into positions (rank 1 to 10) and averages them. Features that
 both models agreed on rose to the top with high confidence. Features only one 
 model found important received penalty ranks, naturally pushing them lower.
 
-3. **Architecture mismatch on Apple Silicon**  
+### 3. **Architecture mismatch on Apple Silicon**  
+
 Running Python 3.9 under Rosetta (x86_64 emulation) caused numpy and XGBoost 
 to fail due to incompatible binary architectures. The fix was rebuilding the 
 virtual environment using the native ARM64 system Python at `/usr/bin/python3` 
@@ -150,9 +140,9 @@ installation at `/opt/homebrew`.
 
 ![Target Distribution](/visuals/EDA/01_target_distribution.png)
 
-   The story here is simple but critical — our dataset is heavily imbalanced. Out of 307,511 borrowers, only 24,825 defaulted. That's roughly 1 in 12. 
-   This tells you that the majority of people in this dataset are reliable borrowers, and your model has far fewer examples of the "bad" behaviour 
-   it needs to detect. This is why accuracy alone is a misleading metric — a model that just says "everyone is fine" would be right 92% of the time 
+   The story here is simple but critical, our dataset is heavily imbalanced. Out of 307,511 borrowers, only 24,825 defaulted. That's roughly 1 in 12. 
+   This tells you that the majority of people in this dataset are reliable borrowers, and your model has far fewer examples of the "bad" behavior 
+   it needs to detect. This is why accuracy alone is a misleading metric, a model that just says "everyone is fine" would be right 92% of the time 
    without learning anything useful.
 
 #### Graph 2 — RF vs XGBoost Importance
@@ -160,7 +150,7 @@ installation at `/opt/homebrew`.
 ![RF vs XGB](/visuals/EDA/02_rf_vs_xgb_importance.png)
 
    This is the casting call for our story. Both models unanimously agree that EXT_SOURCE_2 and EXT_SOURCE_3 are the two most important characters. 
-   Everything else is a supporting cast. The gap between the external scores and the rest of the features is massive — look at how the RF bars drop  
+   Everything else is a supporting cast. The gap between the external scores and the rest of the features is massive, look at how the RF bars drop 
    off a cliff after EXT_SOURCE_3. This tells you that whoever these external credit bureaus are, they've already done a lot of the risk assessment 
    work for us.
 
@@ -181,22 +171,22 @@ installation at `/opt/homebrew`.
 
    This is the most important graph for our project. Let me walk you through the key characters:
 
-   EXT_SOURCE_2 — read it left to right. D1 (lowest scores) has a bad rate of about 17-18%. By D10 (highest scores) it drops to about 2-3%. That is a 
+   **EXT_SOURCE_2** : Read it left to right. D1 (lowest scores) has a bad rate of about 17-18%. By D10 (highest scores) it drops to about 2-3%. That is a 
    beautiful monotonic decline — as the score goes up, default risk goes down consistently across every single decile. This is exactly what a strong predictive 
    feature looks like.
 
-   EXT_SOURCE_3 — same story, same clean decline. These two features are essentially telling you the same thing from two different credit bureaus.
+   **EXT_SOURCE_3** : Same story, same clean decline. These two features are essentially telling you the same thing from two different credit bureaus.
 
-   CREDIT_TO_GOODS — more erratic. The bad rate jumps around rather than declining smoothly. This tells you the relationship is noisier and less linear — 
+   **CREDIT_TO_GOODS** : More erratic. The bad rate jumps around rather than declining smoothly. This tells you the relationship is noisier and less linear — 
    which is why WoE binning will be important to capture it properly.
 
-   FLAG_OWN_CAR — only 2 bars because it's binary (you either own a car or you don't). Slight difference in bad rate between owners and non-owners but not dramatic.
+   **FLAG_OWN_CAR** : Only 2 bars because it's binary (you either own a car or you don't). Slight difference in bad rate between owners and non-owners but not dramatic.
 
-   DEF_30_CNT_SOCIAL_CIRCLE — only 2 bars too, heavily skewed. Most people have zero defaults in their social circle. The tiny group with 1+ social 
+   **DEF_30_CNT_SOCIAL_CIRCLE** : Only 2 bars too, heavily skewed. Most people have zero defaults in their social circle. The tiny group with 1+ social 
    circle defaults has a noticeably higher bad rate. Sparse but meaningful.
 
-   DAYS_EMPLOYED — the most interesting one here. The bad rate actually increases as you go from D1 to D10 — meaning longer employed people default less, 
-   and shorter-employed or recently employed people default more. The spike at D5 is worth noting — could be an artefact of the data distribution.
+   **DAYS_EMPLOYED** : The most interesting one here. The bad rate actually increases as you go from D1 to D10 — meaning longer employed people default less, 
+   and shorter-employed or recently employed people default more. The spike at D5 is worth noting — could be an artifact of the data distribution.
 
 #### Graph 5 — Normalised Mean by Target
 
@@ -204,12 +194,12 @@ installation at `/opt/homebrew`.
 
    This is your quick summary card. For every feature it shows whether defaulters or non-defaulters have a higher average value. The key insights:
 
-   EXT_SOURCE_2 and EXT_SOURCE_3 — non-defaulters (blue) are clearly taller, confirming higher scores = lower risk.
+   **EXT_SOURCE_2 and EXT_SOURCE_3** : Non-defaulters (blue) are clearly taller, confirming higher scores = lower risk.
 
-   DAYS_ID_PUBLISH and DAYS_EMPLOYED — both go negative because they're stored as negative days. The defaulters bar being less negative for DAYS_EMPLOYED means 
+   **DAYS_ID_PUBLISH and DAYS_EMPLOYED** : Both go negative because they're stored as negative days. The defaulters bar being less negative for DAYS_EMPLOYED means 
    defaulters had been employed for fewer days on average — shorter job tenure = higher risk.
 
-   DEF_30_CNT_SOCIAL_CIRCLE and AMT_ANNUITY — defaulters have slightly higher values, meaning higher social circle defaults and higher loan repayment amounts 
+   **DEF_30_CNT_SOCIAL_CIRCLE and AMT_ANNUITY** : Defaulters have slightly higher values, meaning higher social circle defaults and higher loan repayment amounts 
    correlate with default.
 
 #### Graph 6 — Cumulative Bad Rate
@@ -219,22 +209,22 @@ installation at `/opt/homebrew`.
    This is the preview of your model's power before you've even built it. Think of it this way — imagine you lined up all 307K borrowers ranked from lowest to 
    highest EXT_SOURCE_2 score. If you stopped at the worst 20% of borrowers, how many of the total defaults would you have captured?
 
-   For EXT_SOURCE_2 — the curve bows way above the diagonal. By the time you've looked at the riskiest 40% of borrowers you've already captured about 60% of 
-   all defaults. That's a strong signal. The shaded area between the curve and the diagonal is essentially a visual preview of your Gini coefficient.
+   **EXT_SOURCE_2** : The curve bows way above the diagonal. By the time you've looked at the riskiest 40% of borrowers you've already captured about 60% of 
+   all defaults. That's a strong signal. The shaded area between the curve and the diagonal are essentially a visual preview of your Gini coefficient.
 
-   For FLAG_OWN_CAR — the curve barely moves from the diagonal. Owning a car is almost random in terms of predicting default. This is telling you this feature 
+   **FLAG_OWN_CAR** : The curve barely moves from the diagonal. Owning a car is almost random in terms of predicting default. This is telling you this feature 
    may not survive IV filtering.
 
-   For DAYS_EMPLOYED — the curve goes below the diagonal at first then crosses back. That U-shape means it's predictive but in a non-linear way — the relationship 
+   **DAYS_EMPLOYED** : The curve goes below the diagonal at first then crosses back. That U-shape means it's predictive but in a non-linear way — the relationship 
    reverses at some point, which is exactly why WoE binning needs to handle it carefully.
 
 #### Graph 7 — Correlation Heatmap
 
 ![Correlation Heatmap](/visuals/EDA/07_correlation_heatmap.png)
 
-   Two things jump out. First ANNUITY_TO_INCOME and AMT_ANNUITY have a correlation of 0.51 with each other — that's moderate multicollinearity. They're both 
+   Two things jump out. First ANNUITY_TO_INCOME and AMT_ANNUITY have a correlation of 0.51 with each other that's moderate multicollinearity. They're both 
    measuring something about loan repayment burden relative to income, so they're telling a similar story. IV filtering will help decide which one to keep. 
-   Second AMT_INCOME_TOTAL and AMT_ANNUITY also correlate at 0.48 — again related concepts. None of these are dangerously high (above 0.70 would be a problem) 
+   Second AMT_INCOME_TOTAL and AMT_ANNUITY also correlate at 0.48, again related concepts. None of these are dangerously high (above 0.70 would be a problem) 
    but worth noting.
 
 ### IV Results
@@ -243,56 +233,60 @@ installation at `/opt/homebrew`.
 
 The top features confirmed exactly what EDA predicted:
 
--> EXT_SOURCE_3 (0.65) and EXT_SOURCE_2 (0.64) — as discussed, keep these despite the "Suspicious" label. They are genuine external bureau scores, not leakage.
+**EXT_SOURCE_3 (0.65) and EXT_SOURCE_2 (0.64)** : As discussed, keep these despite the "Suspicious" label. They are genuine external bureau scores, not leakage.
 
--> DAYS_EMPLOYED (0.196) and YEARS_EMPLOYED (0.194) — notice these are essentially the same feature since we engineered YEARS_EMPLOYED from DAYS_EMPLOYED. They are telling the same story twice. This is something to address before modelling — we should keep only one of them.
+**DAYS_EMPLOYED (0.196) and YEARS_EMPLOYED (0.194)** : Notice these are essentially the same feature since we engineered YEARS_EMPLOYED from DAYS_EMPLOYED. They are telling the same story twice. This is something to address before modeling — we should keep only one of them.
 
--> AMT_GOODS_PRICE (0.183) — didn't appear in our EDA top 10 but IV says it's meaningful. This is exactly why we run IV on all features rather than just the EDA shortlist.
+**AMT_GOODS_PRICE (0.183)** : Didn't appear in our EDA top 10 but IV says it's meaningful. This is exactly why we run IV on all features rather than just the EDA shortlist.
 
--> DAYS_BIRTH (0.174) and AGE_YEARS (0.173) — same problem as DAYS_EMPLOYED and YEARS_EMPLOYED. We engineered AGE_YEARS from DAYS_BIRTH so they're duplicates. Keep AGE_YEARS since it's more interpretable.
+**DAYS_BIRTH (0.174) and AGE_YEARS (0.173)** : Same problem as DAYS_EMPLOYED and YEARS_EMPLOYED. We engineered AGE_YEARS from DAYS_BIRTH so they're duplicates. Keep AGE_YEARS since it's more interpretable.
 
--> OCCUPATION_TYPE (0.159) and ORGANIZATION_TYPE (0.143) — categorical features that IV confirmed as meaningful. EDA didn't surface these because our feature importance only ran on numeric columns.
+**OCCUPATION_TYPE (0.159) and ORGANIZATION_TYPE (0.143)** : Categorical features that IV confirmed as meaningful. EDA didn't surface these because our feature importance only ran on numeric columns.
 
-#### 17 featurtes dropped by IV
+#### 17 features dropped by IV
 
--> FLAG_OWN_CAR (dropped) — this confirms what the cumulative bad rate curve showed in EDA — the curve barely moved from the diagonal. IV agreed — not predictive enough.
+**FLAG_OWN_CAR (dropped)** : This confirms what the cumulative bad rate curve showed in EDA — the curve barely moved from the diagonal. IV agreed — not predictive enough.
 
--> ANNUITY_TO_INCOME (dropped) — this was in our EDA top 10 but IV says otherwise. This is a case where IV overrules EDA — the feature has weak predictive signal when binned properly.
+**ANNUITY_TO_INCOME (dropped)** : This was in our EDA top 10 but IV says otherwise. This is a case where IV overrules EDA — the feature has weak predictive signal when binned properly.
 
--> CNT_CHILDREN, CNT_FAM_MEMBERS — both dropped, family size doesn't meaningfully predict default in this dataset.
+**CNT_CHILDREN, CNT_FAM_MEMBERS** : Both dropped, family size doesn't meaningfully predict default in this dataset.
 
--> All AMT_REQ_CREDIT_BUREAU_* columns (hour/day/week/month/quarter/year) — all dropped. Bureau enquiry frequency has very little predictive power here.
+**All AMT_REQ_CREDIT_BUREAU_ columns (hour/day/week/month/quarter/year)** : All dropped. Bureau enquiry frequency has very little predictive power here.
 
 #### Data retention check
 
 Prior to the start of the project I had set the data retention rate at 75%, starting from 54 features we're keeping 37. This gives us
-37/54 = 68.5% this is lower but its close to 75%. However we initially started with 122 features which is 34/122 = 30%. The correct
-interpretation for our benchmark is retention after IV filtering of cleaned features and the 17 dropped features are genuinly low signal 
+37/54 = 68.5% this is lower, but it's close to 75%. However, we initially started with 122 features which is 34/122 = 30%. The correct
+interpretation for our benchmark is retention after IV filtering of cleaned features and the 17 dropped features are genuinely low signal 
 so losing them makes the model better, not worse.
 
 ---
 
 ## 🎯 Prediction & Evaluation
 
-### Modelling Approach
+### Modeling Approach
 
 Two models were trained on the WoE-encoded dataset using a stratified 80/20 
-train-test split — stratified to preserve the 8.07% bad rate in both sets.
+train-test split which is also stratified to preserve the 8.07% bad rate in both sets.
 
-**Champion — Logistic Regression Scorecard**  
+**Champion — Logistic Regression Scorecard**
+
 The industry standard for credit risk. WoE encoding linearises all features 
 so logistic regression works optimally. Coefficients are converted into 
 interpretable score points using standard scorecard scaling:
 
 Factor = PDO / ln(2) = 20 / 0.693 = 28.85
+
 Offset = Base_score − Factor × ln(Base_odds) = 600 − 28.85 × ln(50) = 487
+
 Score  = Offset + Factor × ln(odds of repayment)
 
 - Base score: 600 | Base odds: 50:1 | PDO: 20
 - `class_weight="balanced"` handles the 8:92 class imbalance
-- `C=0.1` applies L2 regularisation to prevent overfitting
+- `C=0.1` applies L2 regularization to prevent overfitting
 
-**Challenger — XGBoost**  
+**Challenger — XGBoost**
+
 A gradient boosted tree model used as a performance benchmark. 
 `scale_pos_weight=11` handles class imbalance. Early stopping at round 235 
 prevented overfitting.
@@ -301,32 +295,33 @@ prevented overfitting.
 
 ### Results
 
-| Model | AUC | Gini | KS | Overfit Gap |
-|---|---|---|---|---|
-| LR Scorecard (Champion) | 0.7453 | 0.4905 | 0.3617 | -0.0054 ✅ |
-| XGBoost (Challenger) | 0.7511 | 0.5021 | 0.3730 | 0.0430 ✅ |
+| Model                   | AUC    | Gini   | KS     | Overfit Gap |
+|-------------------------|--------|--------|--------|-------------|
+| LR Scorecard (Champion) | 0.7453 | 0.4905 | 0.3617 | -0.0054 ✅   |
+| XGBoost (Challenger)    | 0.7511 | 0.5021 | 0.3730 | 0.0430 ✅    |
 
 **Score distribution (LR Scorecard on test set):**
 
-| Stat | Value |
-|---|---|
-| Mean score | 497.2 |
-| Std deviation | 26.6 |
-| Min score | 394.8 |
-| Max score | 593.2 |
+| Stat          | Value |
+|---------------|-------|
+| Mean score    | 497.2 |
+| Std deviation | 26.6  |
+| Min score     | 394.8 |
+| Max score     | 593.2 |
 
 ---
 
 ### Champion vs Challenger
 
-| Metric | Delta (XGBoost − LR) |
-|---|---|
-| ΔAUC | +0.0058 |
-| ΔGini | +0.0116 |
-| ΔKS | +0.0113 |
+| Metric             | Delta (XGBoost − LR)           |
+|--------------------|--------------------------------|
+| ΔAUC               | +0.0058                        |
+| ΔGini              | +0.0116                        |
+| ΔKS                | +0.0113                        |
 | PSI between models | 0.0131 → Similar distributions |
 
-**Recommendation: Retain LR Scorecard as Champion.**  
+**Recommendation: Retain LR Scorecard as Champion.**
+
 XGBoost shows marginal improvement across all metrics but the performance 
 gap (ΔAUC = 0.006) is well below the 0.02 threshold that would justify 
 replacing an interpretable champion model. Both models score the population 
@@ -346,18 +341,18 @@ similarly (PSI = 0.013), confirming they capture the same underlying signal.
 Each feature contributes a fixed number of points to the total credit score. 
 Higher points = lower default risk for that feature's WoE bin.
 
-| Rank | Feature | Points |
-|---|---|---|
-| 1 | `EXT_SOURCE_3` | 24.49 |
-| 2 | `NAME_CONTRACT_TYPE` | 23.70 |
-| 3 | `EXT_SOURCE_2` | 21.59 |
-| 4 | `AMT_GOODS_PRICE` | 18.85 |
-| 5 | `CODE_GENDER` | 17.67 |
-| 6 | `NAME_EDUCATION_TYPE` | 17.37 |
-| 7 | `CREDIT_TO_GOODS` | 15.60 |
-| 8 | `DEF_60_CNT_SOCIAL_CIRCLE` | 11.44 |
-| 9 | `ORGANIZATION_TYPE` | 11.24 |
-| 10 | `DEF_30_CNT_SOCIAL_CIRCLE` | 10.91 |
+| Rank | Feature                    | Points |
+|------|----------------------------|--------|
+| 1    | `EXT_SOURCE_3`             | 24.49  |
+| 2    | `NAME_CONTRACT_TYPE`       | 23.70  |
+| 3    | `EXT_SOURCE_2`             | 21.59  |
+| 4    | `AMT_GOODS_PRICE`          | 18.85  |
+| 5    | `CODE_GENDER`              | 17.67  |
+| 6    | `NAME_EDUCATION_TYPE`      | 17.37  |
+| 7    | `CREDIT_TO_GOODS`          | 15.60  |
+| 8    | `DEF_60_CNT_SOCIAL_CIRCLE` | 11.44  |
+| 9    | `ORGANIZATION_TYPE`        | 11.24  |
+| 10   | `DEF_30_CNT_SOCIAL_CIRCLE` | 10.91  |
 
 ### How the Scorecard Works
 A borrower's total credit score is the sum of points from every feature 
@@ -372,39 +367,70 @@ based on which WoE bin their value falls into. For example:
 - Lower score → higher predicted probability of default → higher risk
 
 ### Why Logistic Regression Over XGBoost?
-| Consideration | LR Scorecard | XGBoost |
-|---|---|---|
-| Performance gap | Baseline | +0.006 AUC |
-| Interpretability | Full — points per feature | Requires SHAP |
-| Regulatory compliance | ✅ Directly explainable | ⚠️ Harder to audit |
-| Deployment | Simple scoring table | Requires model file |
+| Consideration         | LR Scorecard              | XGBoost             |
+|-----------------------|---------------------------|---------------------|
+| Performance gap       | Baseline                  | +0.006 AUC          |
+| Interpretability      | Full — points per feature | Requires SHAP       |
+| Regulatory compliance | ✅ Directly explainable    | ⚠️ Harder to audit  |
+| Deployment            | Simple scoring table      | Requires model file |
 
 The marginal performance gain from XGBoost does not justify the loss of 
 interpretability. In a regulated banking environment the LR Scorecard is 
 the appropriate champion model.
 
-### Planned — SHAP Explainability (Phase 2)
-SHAP (SHapley Additive exPlanations) will be added in Phase 2 to explain 
-individual XGBoost predictions. This will answer two key questions:
-- Why was this specific borrower flagged as high risk?
-- Is the model using features in a sensible, expected direction?
+### SHAP Explainability — XGBoost Challenger
+
+SHAP (Shapley Additive exPlanations) was used to explain individual 
+XGBoost predictions. A TreeExplainer was fitted on 2,000 test samples 
+and produced three key outputs:
+
+**Global importance** : `EXT_SOURCE_3` and `EXT_SOURCE_2` dominate with 
+mean absolute SHAP values of 0.386 and 0.355 respectively, nearly three 
+times larger than any other feature. This independently confirms the EDA 
+and IV findings.
+
+**Directional validation** : The beeswarm plot confirmed the model uses 
+every feature in the correct direction. Borrowers with low external scores 
+(blue) have positive SHAP values pushing toward default. Borrowers with 
+high external scores (red) have negative SHAP values pushing away from 
+default. No unexpected reversals were detected.
+
+**Individual explanations** three borrower profiles were explained:
+
+| Borrower   | Total SHAP | Primary driver                                |
+|------------|------------|-----------------------------------------------|
+| High risk  | +2.42      | EXT_SOURCE_3 (+0.87), EXT_SOURCE_2 (+0.76)    |
+| Low risk   | -3.17      | EXT_SOURCE_2 (-0.76), EXT_SOURCE_3 (-0.66)    |
+| Borderline | +0.76      | EXT_SOURCE_2 (+0.28), CREDIT_TO_GOODS (+0.14) |
+
+**SHAP vs IV agreement** : Only one feature showed large disagreement: 
+`CODE_GENDER` ranked 4th by SHAP but 12th by IV. This is expected,
+IV measures univariate predictive power while SHAP captures interaction 
+effects within the full model. All other features agreed within 5 rank 
+positions.
+
+![SHAP Global Importance](/visuals/model_evaluation/05_shap_global_importance.png)
+![SHAP Beeswarm](/visuals/model_evaluation/06_shap_summary_beeswarm.png)
+![SHAP Dependence EXT_SOURCE_2](/visuals/model_evaluation/07_shap_dependence_EXT_SOURCE_2.png)
+![SHAP Dependence EXT_SOURCE_3](/visuals/model_evaluation/07_shap_dependence_EXT_SOURCE_3.png)
 
 ---
 
 ## 🔧 Tech Stack
 
-**Language:** Python 3.9 (ARM64 native on Apple Silicon)
+**Language:** Python 3.9
 
-| Category | Libraries |
-|---|---|
-| Data processing | `pandas`, `numpy` |
-| Machine learning | `scikit-learn`, `xgboost` |
-| WoE / IV binning | `optbinning` |
-| Visualisation | `matplotlib`, `seaborn` |
-| Model serialisation | `joblib` |
-| Data storage | `pyarrow` (parquet format) |
-| Data acquisition | `kagglehub` |
-| Version control | `git`, GitHub |
+| Category            | Libraries                  |
+|---------------------|----------------------------|
+| Data processing     | `pandas`, `numpy`          |
+| Machine learning    | `scikit-learn`, `xgboost`  |
+| WoE / IV binning    | `optbinning`               |
+| Visualisation       | `matplotlib`, `seaborn`    |
+| Explainability      | `shap`                     |
+| Model serialisation | `joblib`                   |
+| Data storage        | `pyarrow` (parquet format) |
+| Data acquisition    | `kagglehub`                |
+| Version control     | `git`, GitHub              |
 
 ---
 
@@ -416,18 +442,19 @@ credit_scorecard_and_default_risk/
 │   ├── raw/          # Raw CSV from Kaggle (not committed — run fetch_data.py)
 │   └── clean/        # WoE-encoded parquet files (not committed — run pipeline)
 ├── scripts/
-│   ├── fetch_data.py            # Downloads Home Credit dataset from Kaggle
-│   ├── clean_data.py            # Cleaning, imputation, feature engineering
-│   ├── EDA.py                   # Feature importance, decile plots, heatmaps
-│   ├── feature_engineering.py   # WoE/IV binning and feature selection
-│   ├── model_training.py        # LR Scorecard + XGBoost training
-│   ├── champion_challenger.py   # A/B model comparison and recommendation
-│   └── helper.py                # Shared utilities, paths, model I/O
+│   ├── fetch_data.py             # Downloads Home Credit dataset from Kaggle
+│   ├── clean_data.py             # Cleaning, imputation, feature engineering
+│   ├── EDA.py                    # Feature importance, decile plots, heatmaps
+│   ├── feature_engineering.py    # WoE/IV binning and feature selection
+│   ├── model_training.py         # LR Scorecard + XGBoost training
+│   ├── champion_challenger.py    # A/B model comparison and recommendation
+│   ├── model_explainability.py   # SHAP explainability for XGBoost
+│   └── helper.py                 # Shared utilities, paths, model I/O
 ├── visuals/
-│   ├── EDA/                     # Feature importance, distribution, heatmap plots
-│   ├── score_distribution/      # Score histogram by target class
-│   └── model_evaluation/        # ROC, KS, metric comparison plots
-├── models/                      # Saved model artifacts (not committed)
+│   ├── EDA/                      # Feature importance, distribution, heatmap plots
+│   ├── score_distribution/       # Score histogram by target class
+│   └── model_evaluation/         # ROC, KS, metric comparison plots
+├── models/                       # Saved model artifacts (not committed)
 ├── LICENSE
 ├── README.md
 └── .gitignore
